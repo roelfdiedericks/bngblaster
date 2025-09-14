@@ -330,24 +330,23 @@ io_dpdk_tx_job(timer_s *timer)
                 break;
             }
             /* Transmit the packet. */
-            io->mbuf->data_len = io->buf_len;
+            io->mbuf->data_len = stream->tx_len;
+            memcpy(io->buf, stream->tx_buf, stream->tx_len);
             if(rte_eth_tx_burst(interface->port_id, io->queue, &io->mbuf, 1) != 0) {
                 /* Dump the packet into pcap file. */
                 if(unlikely(g_ctx->pcap.write_buf && g_ctx->pcap.include_streams)) {
                     pcap = true;
-                    pcapng_push_packet_header(&io->timestamp, io->buf, io->buf_len,
+                    pcapng_push_packet_header(&io->timestamp, io->buf, stream->tx_len,
                                             interface->ifindex, PCAPNG_EPB_FLAGS_OUTBOUND);
                 }
                 stream->tx_packets++;
                 stream->flow_seq++;
                 io->stats.packets++;
-                io->stats.bytes += io->buf_len;
+                io->stats.bytes += stream->tx_len;
                 io->mbuf = NULL;
-                io->buf_len = 0;
                 burst--;
             } else {
-                /* This packet will be retried next interval 
-                * because io->buf_len is not reset to zero. */
+                /* Failed to send stream packet */
                 io->stats.io_errors++;
                 burst = 0;
             }
@@ -578,7 +577,25 @@ io_dpdk_interface_init(bbl_interface_s *interface)
         local_port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
     }
 
-    /* Only enable RSS if the device supports it */
+    /* Check if device supports the requested number of queues */
+    if(nb_rx_queue > dev_info.max_rx_queues) {
+        LOG(INFO, "DPDK: interface %s (%u) requested %u RX queues but max is %u\n",
+            interface->name, port_id, nb_rx_queue, dev_info.max_rx_queues);
+        nb_rx_queue = dev_info.max_rx_queues;
+        if(config->rx_threads > nb_rx_queue) {
+            config->rx_threads = nb_rx_queue;
+        }
+    }
+    if(nb_tx_queue > dev_info.max_tx_queues) {
+        LOG(INFO, "DPDK: interface %s (%u) requested %u TX queues but max is %u\n",
+            interface->name, port_id, nb_tx_queue, dev_info.max_tx_queues);
+        nb_tx_queue = dev_info.max_tx_queues;
+        if(config->tx_threads > nb_tx_queue) {
+            config->tx_threads = nb_tx_queue;
+        }
+    }
+
+    /* Enable RSS if supported and multiple RX queues are used */
     if(dev_info.flow_type_rss_offloads != 0 && nb_rx_queue > 1) {
         local_port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
         local_port_conf.rx_adv_conf.rss_conf.rss_hf =
@@ -587,16 +604,11 @@ io_dpdk_interface_init(bbl_interface_s *interface)
         LOG(DPDK, "DPDK: interface %s (%u) RSS enabled with %u RX queues\n", 
             interface->name, port_id, nb_rx_queue);
     } else {
-        /* RSS not supported or single queue - use default (no RSS) */
+        /* No RSS - but can still use multiple queues */
         local_port_conf.rxmode.mq_mode = 0; /* RTE_ETH_MQ_RX_NONE */
-        if(dev_info.flow_type_rss_offloads == 0 && nb_rx_queue > 1) {
-            LOG(INFO, "DPDK: interface %s (%u) RSS not supported, falling back to single RX queue\n", 
-                interface->name, port_id);
-            nb_rx_queue = 1;
-            /* Update config to reflect actual queue count */
-            if(config->rx_threads > 1) {
-                config->rx_threads = 1;
-            }
+        if(nb_rx_queue > 1) {
+            LOG(INFO, "DPDK: interface %s (%u) using %u RX queues without RSS\n", 
+                interface->name, port_id, nb_rx_queue);
         }
     }
 
