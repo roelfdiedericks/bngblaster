@@ -19,6 +19,9 @@ const char g_multicast_traffic[] = "multicast";
 const char g_session_traffic_ipv4[] = "session-ipv4";
 const char g_session_traffic_ipv6[] = "session-ipv6";
 const char g_session_traffic_ipv6pd[] = "session-ipv6pd";
+
+/* MAC validation skip marker as defined in bbl_stream.h */
+const uint8_t BBL_SKIP_MAC_VALIDATION[ETH_ADDR_LEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 endpoint_state_t g_endpoint = ENDPOINT_ACTIVE;
 
 /**
@@ -2331,28 +2334,34 @@ bbl_stream_rx(bbl_ethernet_header_s *eth, uint8_t *mac)
                 bbl->direction != stream->direction) {
                 return NULL;
             }
-            if(mac) {
+            
+            if(mac && memcmp(mac, BBL_SKIP_MAC_VALIDATION, ETH_ADDR_LEN) != 0) {
                 if(memcmp(mac, eth->dst, ETH_ADDR_LEN) != 0) {
                     return NULL;
                 }
             } else {
-                session = stream->session;
-                if(!session) {
-                    return NULL;
-                }
-                if(session->session_state == BBL_TERMINATED || 
-                   session->session_state == BBL_IDLE) {
-                    return NULL;
-                }
-                if(memcmp(session->client_mac, eth->dst, ETH_ADDR_LEN) != 0) {
-                    return NULL;
-                }
-                if(stream->session_traffic) {
-                    if(bbl->outer_vlan_id != session->vlan_key.outer_vlan_id ||
-                       bbl->inner_vlan_id != session->vlan_key.inner_vlan_id ||
-                       bbl->session_id != session->session_id) {
-                        stream->rx_wrong_session++;
+                if(!(mac && memcmp(mac, BBL_SKIP_MAC_VALIDATION, ETH_ADDR_LEN) == 0)) {
+                    session = stream->session;
+                    if(!session) {
                         return NULL;
+                    }
+                    if(memcmp(session->client_mac, eth->dst, ETH_ADDR_LEN) != 0) {
+                        return NULL;
+                    }
+                }
+                session = stream->session;
+                if(session) {
+                    if(session->session_state == BBL_TERMINATED || 
+                       session->session_state == BBL_IDLE) {
+                        return NULL;
+                    }
+                    if(stream->session_traffic) {
+                        if(bbl->outer_vlan_id != session->vlan_key.outer_vlan_id ||
+                           bbl->inner_vlan_id != session->vlan_key.inner_vlan_id ||
+                           bbl->session_id != session->session_id) {
+                            stream->rx_wrong_session++;
+                            return NULL;
+                        }
                     }
                 }
             }

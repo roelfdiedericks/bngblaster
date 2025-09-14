@@ -9,6 +9,12 @@
 #ifndef __BBL_STREAM_H__
 #define __BBL_STREAM_H__
 
+/* Special marker to signal MAC validation should be skipped.
+ * Used by network interfaces when skip_stream_mac_validation is enabled
+ * to handle upstream traffic in routed scenarios (e.g., PPPoE) where
+ * destination MAC is gateway MAC rather than interface MAC. */
+extern const uint8_t BBL_SKIP_MAC_VALIDATION[ETH_ADDR_LEN];
+
 typedef enum {
     STREAM_STATE_ANY         = 0,
     STREAM_STATE_VERIFIED    = 1,

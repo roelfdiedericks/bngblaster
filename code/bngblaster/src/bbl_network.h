@@ -33,6 +33,8 @@ typedef struct bbl_network_interface_
     uint8_t gateway6_mac[ETH_ADDR_LEN];
 
     uint32_t send_requests;
+    
+    bool skip_stream_mac_validation; /* Skip destination MAC validation for stream packets */
 
     ipv4_prefix ip;
     ipv4addr_t  gateway;

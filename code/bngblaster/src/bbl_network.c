@@ -103,6 +103,9 @@ bbl_network_interfaces_add()
         /* Copy gateway MAC from config (default 00:00:00:00:00:00) */
         memcpy(network_interface->gateway_mac, network_config->gateway_mac, ETH_ADDR_LEN);
         memcpy(network_interface->gateway6_mac, network_config->gateway_mac, ETH_ADDR_LEN);
+        
+        /* Copy skip_stream_mac_validation flag */
+        network_interface->skip_stream_mac_validation = network_config->skip_stream_mac_validation;
 
         /* Init IPv4 */
         if(network_config->ip.address && network_config->gateway) {

@@ -121,6 +121,7 @@ typedef struct bbl_network_config_
     uint8_t mac[ETH_ADDR_LEN];
     uint8_t gateway_mac[ETH_ADDR_LEN];
     bool gateway_resolve_wait;
+    bool skip_stream_mac_validation;
     uint16_t vlan;
     uint16_t mtu;
     

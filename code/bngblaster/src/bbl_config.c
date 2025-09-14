@@ -685,7 +685,7 @@ json_parse_network_interface(json_t *network_interface, bbl_network_config_s *ne
         "ospfv2-instance-id", "ospfv2-metric", "ospfv2-type",
         "ospfv3-instance-id", "ospfv3-metric", "ospfv3-type",
         "cfm-cc", "cfm-level", "cfm-ma-id", "cfm-ma-name", "cfm-seq",
-        "ldp-instance-id"
+        "ldp-instance-id", "skip-stream-mac-validation"
     };
     if(!schema_validate(network_interface, "network", schema, 
     sizeof(schema)/sizeof(schema[0]))) {
@@ -761,6 +761,13 @@ json_parse_network_interface(json_t *network_interface, bbl_network_config_s *ne
         network_config->gateway_resolve_wait = json_boolean_value(value);
     } else {
         network_config->gateway_resolve_wait = true;
+    }
+
+    JSON_OBJ_GET_BOOL(network_interface, value, "network", "skip-stream-mac-validation");
+    if(value) {
+        network_config->skip_stream_mac_validation = json_boolean_value(value);
+    } else {
+        network_config->skip_stream_mac_validation = false;
     }
 
     /* IS-IS interface configuration */

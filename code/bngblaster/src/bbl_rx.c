@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 #include "bbl.h"
+#include "bbl_stream.h"
 
 static bool
 bbl_rx_stream_network(bbl_network_interface_s *interface, 
@@ -15,7 +16,16 @@ bbl_rx_stream_network(bbl_network_interface_s *interface,
 {
     bbl_stream_s *stream;
     if(!eth->bbl) return false;
-    stream = bbl_stream_rx(eth, interface->mac);
+    
+    if(interface->skip_stream_mac_validation) {
+        /* Use special marker to skip MAC validation for upstream packets 
+         * in routed scenarios (e.g., PPPoE) where destination MAC is 
+         * gateway MAC, not interface MAC */
+        stream = bbl_stream_rx(eth, (uint8_t*)BBL_SKIP_MAC_VALIDATION);
+    } else {
+        /* Normal MAC validation against interface MAC */
+        stream = bbl_stream_rx(eth, interface->mac);
+    }
     if(stream) {
         if(stream->rx_network_interface != interface) {
             if(stream->rx_network_interface) {
