@@ -2068,6 +2068,7 @@ bbl_stream_init() {
         config->type = BBL_SUB_TYPE_IPV4;
         config->direction = BBL_DIRECTION_UP;
         config->ttl = BBL_DEFAULT_TTL;
+        config->length = 1000; /* Default packet length for session traffic */
         config->session_traffic = true;
         config->pps = g_ctx->config.session_traffic_ipv4_pps;
         config->pps_upstream = config->pps;
@@ -2083,6 +2084,7 @@ bbl_stream_init() {
         config->type = BBL_SUB_TYPE_IPV4;
         config->direction = BBL_DIRECTION_DOWN;
         config->ttl = BBL_DEFAULT_TTL;
+        config->length = 1000; /* Default packet length for session traffic */
         config->session_traffic = true;
         config->pps = g_ctx->config.session_traffic_ipv4_pps;
         config->pps_upstream = config->pps;
@@ -2105,6 +2107,7 @@ bbl_stream_init() {
         config->type = BBL_SUB_TYPE_IPV6;
         config->direction = BBL_DIRECTION_UP;
         config->ttl = BBL_DEFAULT_TTL;
+        config->length = 1000; /* Default packet length for session traffic */
         config->session_traffic = true;
         config->pps = g_ctx->config.session_traffic_ipv6_pps;
         config->pps_upstream = config->pps;
@@ -2120,6 +2123,7 @@ bbl_stream_init() {
         config->type = BBL_SUB_TYPE_IPV6;
         config->direction = BBL_DIRECTION_DOWN;
         config->ttl = BBL_DEFAULT_TTL;
+        config->length = 1000; /* Default packet length for session traffic */
         config->session_traffic = true;
         config->pps = g_ctx->config.session_traffic_ipv6_pps;
         config->pps_upstream = config->pps;
@@ -2142,6 +2146,7 @@ bbl_stream_init() {
         config->type = BBL_SUB_TYPE_IPV6PD;
         config->direction = BBL_DIRECTION_UP;
         config->ttl = BBL_DEFAULT_TTL;
+        config->length = 1000; /* Default packet length for session traffic */
         config->session_traffic = true;
         config->pps = g_ctx->config.session_traffic_ipv6pd_pps;
         config->pps_upstream = config->pps;
@@ -2157,6 +2162,7 @@ bbl_stream_init() {
         config->type = BBL_SUB_TYPE_IPV6PD;
         config->direction = BBL_DIRECTION_DOWN;
         config->ttl = BBL_DEFAULT_TTL;
+        config->length = 1000; /* Default packet length for session traffic */
         config->session_traffic = true;
         config->pps = g_ctx->config.session_traffic_ipv6pd_pps;
         config->pps_upstream = config->pps;

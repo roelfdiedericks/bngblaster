@@ -13,6 +13,6 @@
 #define GIT_SHA ""
 
 #define COMPILER_ID "GNU"
-#define COMPILER_VERSION "11.4.0"
+#define COMPILER_VERSION "12.2.0"
 
 #endif

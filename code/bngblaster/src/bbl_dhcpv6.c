@@ -104,7 +104,7 @@ bbl_dhcpv6_start(bbl_session_s *session)
         session->dhcpv6_xid = rand() & 0xffffff;
 
         if(g_ctx->config.dhcpv6_ia_na && 
-           session->access_type == ACCESS_TYPE_IPOE) {
+           (session->access_type == ACCESS_TYPE_IPOE || session->access_type == ACCESS_TYPE_PPPOE)) {
             session->dhcpv6_ia_na_iaid = g_dhcpv6_iaid++;
         }
         if(g_ctx->config.dhcpv6_ia_pd) {
@@ -118,6 +118,9 @@ bbl_dhcpv6_start(bbl_session_s *session)
         if(session->access_type == ACCESS_TYPE_IPOE) {
             bbl_session_update_state(session, BBL_IPOE_SETUP);
         }
+        /* For PPPoE, DHCPv6 starts after the session is already established,
+         * so we don't change the session state here */
+
     }
 }
 
@@ -265,7 +268,7 @@ bbl_dhcpv6_rx(bbl_session_s *session, bbl_ethernet_header_s *eth, bbl_dhcpv6_s *
                     memcpy(&session->dhcpv6_dns2, dhcpv6->dns2, IPV6_ADDR_LEN);
                 }
             }
-            if(session->access_type == ACCESS_TYPE_IPOE && dhcpv6->ia_na_address) {
+            if((session->access_type == ACCESS_TYPE_IPOE || session->access_type == ACCESS_TYPE_PPPOE) && dhcpv6->ia_na_address) {
                 /* IA_NA */
                 if(dhcpv6->ia_na_valid_lifetime) session->dhcpv6_lease_time = dhcpv6->ia_na_valid_lifetime;
                 if(dhcpv6->ia_na_t1) session->dhcpv6_t1 = dhcpv6->ia_na_t1;
@@ -309,7 +312,16 @@ bbl_dhcpv6_rx(bbl_session_s *session, bbl_ethernet_header_s *eth, bbl_dhcpv6_s *
             bbl_access_rx_established_ipoe(interface, session, eth);
             session->send_requests |= BBL_SEND_ICMPV6_RS;
             bbl_session_tx_qnode_insert(session);
+        } else if(session->access_type == ACCESS_TYPE_PPPOE) {
+            /* For PPPoE, the session is already established when DHCPv6 runs.
+             * The ia-na address from DHCPv6 complements the SLAAC address. */
+            if(dhcpv6->ia_na_address) {
+                ACTIVATE_ENDPOINT(session->endpoint.ipv6);
+            }
+            /* Update the session state if needed */
+            bbl_access_rx_established_pppoe(interface, session, eth);
         }
+
     } else if(dhcpv6->type == DHCPV6_MESSAGE_ADVERTISE) {
         LOG(DHCP, "DHCPv6 (ID: %u) DHCPv6-Advertise received\n", session->session_id);
         session->stats.dhcpv6_rx_advertise++;
