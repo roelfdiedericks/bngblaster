@@ -1392,12 +1392,48 @@ bbl_stream_update_udp(bbl_stream_s *stream)
     uint16_t  udp_len = stream->tx_bbl_hdr_len + UDP_HDR_LEN;
     uint8_t  *udp_buf = (uint8_t*)(stream->tx_buf + (stream->tx_len - udp_len));
     uint16_t *checksum = (uint16_t*)(udp_buf+6);
-
+    uint8_t  *packet = stream->tx_buf;
+    uint16_t  eth_type;
+    uint8_t  *ip_header;
+    
     *checksum = 0;
-    if(stream->ipv6_src && stream->ipv6_dst) {
-        *checksum = bbl_ipv6_udp_checksum(stream->ipv6_src, stream->ipv6_dst, udp_buf, udp_len);
-    } else {
-        *checksum = bbl_ipv4_udp_checksum(stream->ipv4_src, stream->ipv4_dst, udp_buf, udp_len);
+    
+    /* Skip Ethernet header (14 bytes) and VLAN tags if present */
+    packet += 12; /* Skip DST and SRC MAC */
+    eth_type = be16toh(*(uint16_t*)packet);
+    packet += 2;
+    
+    /* Skip VLAN tags */
+    while(eth_type == ETH_TYPE_VLAN || eth_type == ETH_TYPE_QINQ) {
+        packet += 2; /* Skip VLAN header */
+        eth_type = be16toh(*(uint16_t*)packet);
+        packet += 2;
+    }
+    
+    /* Skip PPPoE header if present */
+    if(eth_type == ETH_TYPE_PPPOE_SESSION) {
+        packet += 6; /* PPPoE header */
+        uint16_t ppp_protocol = be16toh(*(uint16_t*)packet);
+        packet += 2; /* PPP protocol */
+        if(ppp_protocol == PROTOCOL_IPV6) {
+            eth_type = ETH_TYPE_IPV6;
+        } else if(ppp_protocol == PROTOCOL_IPV4) {
+            eth_type = ETH_TYPE_IPV4;
+        }
+    }
+    
+    ip_header = packet;
+    
+    if(eth_type == ETH_TYPE_IPV6) {
+        /* Extract actual IPv6 addresses from packet */
+        uint8_t *src = ip_header + 8;
+        uint8_t *dst = ip_header + 24;
+        *checksum = bbl_ipv6_udp_checksum(src, dst, udp_buf, udp_len);
+    } else if(eth_type == ETH_TYPE_IPV4) {
+        /* Extract actual IPv4 addresses from packet */
+        uint32_t src = *(uint32_t*)(ip_header + 12);
+        uint32_t dst = *(uint32_t*)(ip_header + 16);
+        *checksum = bbl_ipv4_udp_checksum(src, dst, udp_buf, udp_len);
     }
 }
 
@@ -1488,7 +1524,10 @@ bbl_stream_io_send(bbl_stream_s *stream)
     *(uint32_t*)ptr = io->timestamp.tv_nsec;
     if(stream->tcp) {
         bbl_stream_update_tcp(stream);
-    } else if(g_ctx->config.stream_udp_checksum) {
+    } else if(g_ctx->config.stream_udp_checksum || 
+              (stream->sub_type == BBL_SUB_TYPE_IPV6) || 
+              (stream->sub_type == BBL_SUB_TYPE_IPV6PD)) {
+        /* UDP checksums are mandatory for IPv6 (RFC 2460) */
         bbl_stream_update_udp(stream);
     }
     if(stream->flow_seq == 1) {

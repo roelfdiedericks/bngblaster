@@ -1154,10 +1154,8 @@ encode_ipv6(uint8_t *buf, uint16_t *len,
             ipv6_len = *len - ipv6_len;
             /* Update UDP length */
             *(uint16_t*)(buf + 4) = htobe16(ipv6_len);
-            if(((bbl_udp_s*)ipv6->next)->protocol != UDP_PROTOCOL_BBL) {
-                /* Update UDP checksum */
-                *(uint16_t*)(buf + 6) = bbl_ipv6_udp_checksum(ipv6->src, ipv6->dst, buf, ipv6_len);
-            }
+            /* Update UDP checksum (mandatory for IPv6) */
+            *(uint16_t*)(buf + 6) = bbl_ipv6_udp_checksum(ipv6->src, ipv6->dst, buf, ipv6_len);
             break;
         case IPV6_NEXT_HEADER_TCP:
             result = encode_raw_tcp(buf, len, (bbl_udp_s*)ipv6->next);
