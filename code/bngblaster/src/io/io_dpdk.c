@@ -578,10 +578,27 @@ io_dpdk_interface_init(bbl_interface_s *interface)
         local_port_conf.txmode.offloads |= RTE_ETH_TX_OFFLOAD_MBUF_FAST_FREE;
     }
 
-    local_port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
-    local_port_conf.rx_adv_conf.rss_conf.rss_hf =
-        (RTE_ETH_RSS_VLAN | RTE_ETH_RSS_IP | RTE_ETH_RSS_TCP | RTE_ETH_RSS_UDP | RTE_ETH_RSS_PPPOE | RTE_ETH_RSS_L2TPV2| RTE_ETH_RSS_MPLS) &
-        dev_info.flow_type_rss_offloads;
+    /* Only enable RSS if the device supports it */
+    if(dev_info.flow_type_rss_offloads != 0 && nb_rx_queue > 1) {
+        local_port_conf.rxmode.mq_mode = RTE_ETH_MQ_RX_RSS;
+        local_port_conf.rx_adv_conf.rss_conf.rss_hf =
+            (RTE_ETH_RSS_VLAN | RTE_ETH_RSS_IP | RTE_ETH_RSS_TCP | RTE_ETH_RSS_UDP | RTE_ETH_RSS_PPPOE | RTE_ETH_RSS_L2TPV2| RTE_ETH_RSS_MPLS) &
+            dev_info.flow_type_rss_offloads;
+        LOG(DPDK, "DPDK: interface %s (%u) RSS enabled with %u RX queues\n", 
+            interface->name, port_id, nb_rx_queue);
+    } else {
+        /* RSS not supported or single queue - use default (no RSS) */
+        local_port_conf.rxmode.mq_mode = 0; /* RTE_ETH_MQ_RX_NONE */
+        if(dev_info.flow_type_rss_offloads == 0 && nb_rx_queue > 1) {
+            LOG(INFO, "DPDK: interface %s (%u) RSS not supported, falling back to single RX queue\n", 
+                interface->name, port_id);
+            nb_rx_queue = 1;
+            /* Update config to reflect actual queue count */
+            if(config->rx_threads > 1) {
+                config->rx_threads = 1;
+            }
+        }
+    }
 
     ret = rte_eth_dev_configure(port_id, nb_rx_queue, nb_tx_queue, &local_port_conf);
     if(ret < 0) {

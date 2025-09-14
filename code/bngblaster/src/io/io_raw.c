@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 #include "io.h"
+#include <linux/if_packet.h>
 
 extern bool g_init_phase;
 extern bool g_traffic;
@@ -20,8 +21,8 @@ io_raw_rx_job(timer_s *timer)
     io_handle_s *io = timer->data;
     bbl_interface_s *interface = io->interface;
 
-    struct sockaddr saddr;
-    int saddr_size = sizeof(saddr);
+    struct sockaddr_ll sll;
+    socklen_t sll_size = sizeof(sll);
 
     bbl_ethernet_header_s *eth;
 
@@ -37,9 +38,14 @@ io_raw_rx_job(timer_s *timer)
     io->timestamp.tv_sec = timer->timestamp->tv_sec;
     io->timestamp.tv_nsec = timer->timestamp->tv_nsec;
     while(true) {
-        io->buf_len = recvfrom(io->fd, io->buf, IO_BUFFER_LEN, 0, &saddr , (socklen_t*)&saddr_size);
+        sll_size = sizeof(sll);
+        io->buf_len = recvfrom(io->fd, io->buf, IO_BUFFER_LEN, 0, (struct sockaddr*)&sll, &sll_size);
         if(io->buf_len < 14 || io->buf_len > IO_BUFFER_LEN) {
             break;
+        }
+        /* Skip our own outgoing packets */
+        if(sll.sll_pkttype == PACKET_OUTGOING) {
+            continue;
         }
         io->stats.packets++;
         io->stats.bytes += io->buf_len;
@@ -198,8 +204,8 @@ io_raw_thread_rx_run_fn(io_thread_s *thread)
 {
     io_handle_s *io = thread->io;
 
-    struct sockaddr saddr;
-    int saddr_size = sizeof(saddr);
+    struct sockaddr_ll sll;
+    socklen_t sll_size = sizeof(sll);
 
     assert(io->direction == IO_INGRESS);
 
@@ -211,9 +217,14 @@ io_raw_thread_rx_run_fn(io_thread_s *thread)
         /* Get RX timestamp */
         clock_gettime(CLOCK_MONOTONIC, &io->timestamp);
         /* Receive from socket */
-        io->buf_len = recvfrom(io->fd, io->buf, IO_BUFFER_LEN, 0, &saddr , (socklen_t*)&saddr_size);
+        sll_size = sizeof(sll);
+        io->buf_len = recvfrom(io->fd, io->buf, IO_BUFFER_LEN, 0, (struct sockaddr*)&sll, &sll_size);
         if(io->buf_len < 14 || io->buf_len > IO_BUFFER_LEN) {
             nanosleep(&sleep, &rem);
+            continue;
+        }
+        /* Skip our own outgoing packets */
+        if(sll.sll_pkttype == PACKET_OUTGOING) {
             continue;
         }
         /* Process packet */
