@@ -3372,7 +3372,7 @@ json_parse_config(json_t *root)
             const char *schema[] = {
                 "conf-request-timeout", "conf-request-retry",
                 "keepalive-interval", "keepalive-retry", "start-delay",
-                "ignore-vendor-specific", "connection-status-message"
+                "ignore-vendor-specific", "connection-status-message", "renegotiation"
             };
             if(!schema_validate(sub, "lcp", schema, 
             sizeof(schema)/sizeof(schema[0]))) {
@@ -3406,6 +3406,10 @@ json_parse_config(json_t *root)
             JSON_OBJ_GET_BOOL(sub, value, "ppp->lcp", "connection-status-message");
             if(value) {
                 g_ctx->config.lcp_connection_status_message = json_boolean_value(value);
+            }
+            JSON_OBJ_GET_BOOL(sub, value, "ppp->lcp", "renegotiation");
+            if(value) {
+                g_ctx->config.lcp_renegotiation = json_boolean_value(value);
             }
         }
         sub = json_object_get(section, "ipcp");
@@ -4531,6 +4535,7 @@ bbl_config_init_defaults()
     g_ctx->config.lcp_conf_request_timeout = 5;
     g_ctx->config.lcp_conf_request_retry = 10;
     g_ctx->config.lcp_keepalive_interval = 30;
+    g_ctx->config.lcp_renegotiation = true; /* Default: enabled (RFC 1661 compliant) */
     g_ctx->config.lcp_keepalive_retry = 3;
     g_ctx->config.authentication_timeout = 5;
     g_ctx->config.authentication_retry = 30;

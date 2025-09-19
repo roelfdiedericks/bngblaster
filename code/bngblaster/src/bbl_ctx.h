@@ -260,6 +260,7 @@ typedef struct bbl_ctx_
         uint16_t lcp_start_delay;
         bool lcp_vendor_ignore;
         bool lcp_connection_status_message;
+        bool lcp_renegotiation; /* Allow LCP renegotiation when Configure-Request received in OPENED state */
 
         /* Authentication */
         uint16_t authentication_timeout;

@@ -1452,8 +1452,13 @@ bbl_access_rx_lcp(bbl_access_interface_s *interface,
                 session->auth_protocol = lcp->auth;
                 if(session->access_config->authentication_protocol) {
                     if(session->access_config->authentication_protocol != lcp->auth) {
-                        lcp->auth = session->access_config->authentication_protocol;
-                        session->auth_protocol = 0;
+                        /* During LCP renegotiation (OPENED state), accept peer's auth requirement */
+                        if(session->lcp_state != BBL_PPP_OPENED) {
+                            /* Normal negotiation - use configured auth */
+                            lcp->auth = session->access_config->authentication_protocol;
+                            session->auth_protocol = 0;
+                        }
+                        /* else: renegotiation - keep peer's auth_protocol */
                     }
                 } else {
                     lcp->auth = PROTOCOL_PAP;
@@ -1497,6 +1502,65 @@ bbl_access_rx_lcp(bbl_access_interface_s *interface,
                     break;
                 case BBL_PPP_LOCAL_ACK:
                     bbl_access_lcp_opened(session);
+                    break;
+                case BBL_PPP_OPENED:
+                    if(g_ctx->config.lcp_renegotiation) {
+                        /* RFC 1661 compliant behavior: restart LCP negotiation
+                         * when Configure-Request received in OPENED state.
+                         * Essential for VPDN/L2TP LAC scenarios where LNS initiates renegotiation. */
+                        LOG(PPPOE, "LCP Renegotiation (ID: %u) Configure-Request received in OPENED state, restarting LCP\n", 
+                            session->session_id);
+                        
+                        /* Stop LCP echo timer if running */
+                        timer_del(session->timer_lcp_echo);
+                        
+                        /* Reset LCP state machine - treat as new negotiation */
+                        session->lcp_state = BBL_PPP_PEER_ACK;
+                        
+                        /* Reset ALL protocol states to start fresh */
+                        if(session->ipcp_state > BBL_PPP_DISABLED) {
+                            session->ipcp_state = BBL_PPP_CLOSED;
+                            session->ipcp_retries = 0;
+                            session->ipcp_identifier = 0;
+                            session->ipcp_peer_identifier = 0;
+                        }
+                        if(session->ip6cp_state > BBL_PPP_DISABLED) {
+                            session->ip6cp_state = BBL_PPP_CLOSED;
+                            session->ip6cp_retries = 0;
+                            session->ip6cp_identifier = 0;
+                            session->ip6cp_peer_identifier = 0;
+                        }
+                        
+                        /* Clear ALL authentication state - critical for re-authentication */
+                        session->auth_retries = 0;
+                        session->chap_identifier = 0;
+                        /* Note: auth_protocol will be set from Configure-Request options above */
+                        
+                        /* Clear IP addresses assigned in previous negotiation */
+                        session->ip_address = 0;
+                        session->peer_ip_address = 0;
+                        session->dns1 = 0;
+                        session->dns2 = 0;
+                        if(session->ipv6_prefix.len) {
+                            memset(&session->ipv6_prefix, 0, sizeof(session->ipv6_prefix));
+                        }
+                        if(session->delegated_ipv6_prefix.len) {
+                            memset(&session->delegated_ipv6_prefix, 0, sizeof(session->delegated_ipv6_prefix));
+                        }
+                        
+                        /* Reset session state back to LINK phase for complete renegotiation */
+                        bbl_session_update_state(session, BBL_PPP_LINK);
+                        
+                        /* Send our own Configure-Request to match the restart */
+                        session->lcp_request_code = PPP_CODE_CONF_REQUEST;
+                        session->send_requests |= BBL_SEND_LCP_REQUEST;
+                        session->lcp_retries = 0;
+                    } else {
+                        /* Non-RFC compliant: Just ACK without renegotiation
+                         * (kept for backward compatibility with tests that expect this behavior) */
+                        LOG(DEBUG, "LCP (ID: %u) Configure-Request received in OPENED state, sending ACK without renegotiation\n",
+                            session->session_id);
+                    }
                     break;
                 default:
                     break;
