@@ -261,8 +261,16 @@ bbl_tx_pap_timeout(timer_s *timer)
     if(session->session_state == BBL_PPP_AUTH) {
         session->access_interface->stats.pap_timeout++;
         if(session->auth_retries > g_ctx->config.authentication_retry) {
+            snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                     "PAP authentication timeout after %u retries (max: %u, timeout: %us)", 
+                     session->auth_retries, g_ctx->config.authentication_retry,
+                     g_ctx->config.authentication_timeout);
+            LOG(INFO, "PAP Timeout (ID: %u) %s\n", session->session_id, session->termination_reason);
             bbl_session_clear(session);
         } else {
+            LOG(INFO, "PAP Retry (ID: %u) Retry %u/%u after %u seconds timeout\n", 
+                session->session_id, session->auth_retries + 1, 
+                g_ctx->config.authentication_retry, g_ctx->config.authentication_timeout);
             session->send_requests |= BBL_SEND_PAP_REQUEST;
             bbl_session_tx_qnode_insert(session);
         }
@@ -313,8 +321,16 @@ bbl_tx_chap_timeout(timer_s *timer)
     if(session->session_state == BBL_PPP_AUTH) {
         session->access_interface->stats.chap_timeout++;
         if(session->auth_retries > g_ctx->config.authentication_retry) {
+            snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                     "CHAP authentication timeout after %u retries (max: %u, timeout: %us)", 
+                     session->auth_retries, g_ctx->config.authentication_retry,
+                     g_ctx->config.authentication_timeout);
+            LOG(INFO, "CHAP Timeout (ID: %u) %s\n", session->session_id, session->termination_reason);
             bbl_session_clear(session);
         } else {
+            LOG(INFO, "CHAP Retry (ID: %u) Retry %u/%u after %u seconds timeout\n", 
+                session->session_id, session->auth_retries + 1, 
+                g_ctx->config.authentication_retry, g_ctx->config.authentication_timeout);
             session->send_requests |= BBL_SEND_CHAP_RESPONSE;
             bbl_session_tx_qnode_insert(session);
         }
@@ -704,6 +720,10 @@ bbl_ipcp_timeout(timer_s *timer)
             session->ipcp_state = BBL_PPP_CLOSED;
             LOG(PPPOE, "IPCP TIMEOUT (ID: %u)\n", session->session_id);
             if(session->ipcp_state == BBL_PPP_CLOSED && session->ip6cp_state == BBL_PPP_CLOSED) {
+                snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                         "IPCP configuration timeout after %u retries (max: %u)", 
+                         session->ipcp_retries, g_ctx->config.ipcp_conf_request_retry);
+                LOG(DEBUG, "Session Clear (ID: %u) %s\n", session->session_id, session->termination_reason);
                 bbl_session_clear(session);
             }
         } else {
@@ -807,6 +827,10 @@ bbl_lcp_timeout(timer_s *timer)
             session->access_interface->stats.lcp_timeout++;
         }
         if(session->lcp_retries > g_ctx->config.lcp_conf_request_retry) {
+            snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                     "LCP configuration timeout after %u retries (max: %u)", 
+                     session->lcp_retries, g_ctx->config.lcp_conf_request_retry);
+            LOG(DEBUG, "Session Clear (ID: %u) %s\n", session->session_id, session->termination_reason);
             bbl_session_clear(session);
         } else {
             session->send_requests |= BBL_SEND_LCP_REQUEST;

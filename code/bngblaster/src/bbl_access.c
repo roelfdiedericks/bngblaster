@@ -848,6 +848,12 @@ bbl_access_rx_pap(bbl_access_interface_s *interface,
                 bbl_session_tx_qnode_insert(session);
                 break;
             default:
+                snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                         "PAP authentication failed (code: %u, reply: %.*s)", 
+                         pap->code, 
+                         pap->reply_message_len ? pap->reply_message_len : 0,
+                         pap->reply_message ? pap->reply_message : "none");
+                LOG(INFO, "Authentication Failure (ID: %u) %s\n", session->session_id, session->termination_reason);
                 bbl_session_update_state(session, BBL_PPP_TERMINATING);
                 session->lcp_request_code = PPP_CODE_TERM_REQUEST;
                 session->lcp_options_len = 0;
@@ -927,6 +933,12 @@ bbl_access_rx_chap(bbl_access_interface_s *interface,
                 bbl_session_tx_qnode_insert(session);
                 break;
             default:
+                snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                         "CHAP authentication failed (code: %u, reply: %.*s)", 
+                         chap->code, 
+                         chap->reply_message_len ? chap->reply_message_len : 0,
+                         chap->reply_message ? chap->reply_message : "none");
+                LOG(INFO, "Authentication Failure (ID: %u) %s\n", session->session_id, session->termination_reason);
                 bbl_session_update_state(session, BBL_PPP_TERMINATING);
                 session->lcp_request_code = PPP_CODE_TERM_REQUEST;
                 session->lcp_options_len = 0;
@@ -1322,7 +1334,11 @@ bbl_access_lcp_echo(timer_s *timer)
             interface->stats.lcp_echo_timeout++;
         }
         if(session->lcp_retries > g_ctx->config.lcp_keepalive_retry) {
-            LOG(PPPOE, "LCP ECHO TIMEOUT (ID: %u)\n", session->session_id);
+            snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                     "LCP Echo timeout after %u retries (max: %u, interval: %us)", 
+                     session->lcp_retries, g_ctx->config.lcp_keepalive_retry,
+                     g_ctx->config.lcp_keepalive_interval);
+            LOG(PPPOE, "LCP ECHO TIMEOUT (ID: %u) %s\n", session->session_id, session->termination_reason);
             /* Force terminate session after timeout. */
             session->lcp_state = BBL_PPP_CLOSED;
             if(session->ipcp_state > BBL_PPP_DISABLED) {
@@ -1617,6 +1633,9 @@ bbl_access_rx_lcp(bbl_access_interface_s *interface,
                 session->lcp_request_code = PPP_CODE_TERM_REQUEST;
                 session->send_requests |= BBL_SEND_LCP_REQUEST;
             }
+            snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                     "LCP Terminate-Request received from server (identifier: %u)", lcp->identifier);
+            LOG(DEBUG, "Session Termination (ID: %u) %s\n", session->session_id, session->termination_reason);
             bbl_session_update_state(session, BBL_PPP_TERMINATING);
             bbl_session_tx_qnode_insert(session);
             break;
@@ -1811,6 +1830,37 @@ bbl_access_rx_discovery(bbl_access_interface_s *interface,
             break;
         case PPPOE_PADT:
             interface->stats.padt_rx++;
+            {
+                const char *auth_state = "unknown";
+                if(session->session_state == BBL_PPP_AUTH) {
+                    if(session->auth_protocol == PROTOCOL_PAP) {
+                        auth_state = "PAP in progress";
+                    } else if(session->auth_protocol == PROTOCOL_CHAP) {
+                        auth_state = "CHAP in progress";
+                    } else {
+                        auth_state = "auth protocol negotiation";
+                    }
+                } else if(session->auth_retries > 0) {
+                    if(session->auth_protocol == PROTOCOL_PAP) {
+                        auth_state = "PAP attempted";
+                    } else if(session->auth_protocol == PROTOCOL_CHAP) {
+                        auth_state = "CHAP attempted";
+                    } else {
+                        auth_state = "auth attempted";
+                    }
+                } else if(session->lcp_state == BBL_PPP_OPENED) {
+                    auth_state = "LCP completed, auth pending";
+                } else if(session->lcp_state < BBL_PPP_OPENED) {
+                    auth_state = "LCP negotiation";
+                } else {
+                    auth_state = "post-auth phase";
+                }
+                
+                snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                         "PADT received from server (pppoe_session_id: %u, state: %s, auth_retries: %u)", 
+                         session->pppoe_session_id, auth_state, session->auth_retries);
+            }
+            LOG(INFO, "Session Termination (ID: %u) %s\n", session->session_id, session->termination_reason);
             bbl_session_update_state(session, BBL_TERMINATED);
             session->send_requests = 0;
             break;

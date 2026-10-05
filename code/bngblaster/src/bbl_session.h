@@ -353,6 +353,9 @@ typedef struct bbl_session_
         uint32_t flapped; /* flap counter */
     } stats;
 
+    /* Session termination tracking */
+    char termination_reason[256]; /* reason for last termination/flap */
+
 } bbl_session_s;
 
 const char *

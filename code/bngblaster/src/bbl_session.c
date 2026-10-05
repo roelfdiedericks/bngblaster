@@ -638,6 +638,33 @@ bbl_session_update_state(bbl_session_s *session, session_state_t new_state)
                 session->stats.flapped++;
                 g_ctx->sessions_flapped++;
 
+                /* Log the flap event */
+                if(strlen(session->termination_reason) == 0) {
+                    /* If no specific reason was set, try to determine from context */
+                    const char *reason = "Unknown reason";
+                    if(old_state == BBL_PPP_TERMINATING) {
+                        reason = "PPP session terminated";
+                    } else if(old_state == BBL_TERMINATING) {
+                        reason = "Session terminating (PADT sent)";
+                    } else if(old_state == BBL_PPP_AUTH) {
+                        reason = "Authentication phase failure";
+                    } else if(old_state == BBL_PPPOE_INIT || old_state == BBL_PPPOE_REQUEST) {
+                        reason = "PPPoE discovery failure";
+                    } else if(old_state == BBL_PPP_LINK) {
+                        reason = "LCP negotiation failure";
+                    } else if(old_state == BBL_PPP_NETWORK) {
+                        reason = "Network protocol negotiation failure";
+                    }
+                    snprintf(session->termination_reason, sizeof(session->termination_reason), 
+                             "%s (from state: %s)", reason, session_state_string(old_state));
+                }
+                
+                LOG(INFO, "Session FLAPPED (ID: %u) Flap Count: %u, Reason: %s\n", 
+                    session->session_id, session->stats.flapped, session->termination_reason);
+
+                /* Clear termination reason for next time */
+                session->termination_reason[0] = '\0';
+
                 /* Reconnect */
                 if(!session->reconnect_disabled && 
                    ((session->access_type == ACCESS_TYPE_PPPOE && g_ctx->config.pppoe_reconnect) || 
